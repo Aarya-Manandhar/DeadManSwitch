@@ -150,8 +150,6 @@ export default function App() {
     showStatus(`Signed in as ${payload.email}. Mapping to Smart Account…`, 'success');
 
     const emailHash = ethers.keccak256(ethers.toUtf8Bytes(payload.email));
-    console.log("📧 Email:", payload.email);
-    console.log("🔢 Email Hash:", emailHash);
 
     // Derive deterministic owner from hash
     const deterministicOwner = ethers.getAddress(ethers.dataSlice(emailHash, 12));
