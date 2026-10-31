@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { encryptFile, decryptFile, wrapKeyForStorage, toBase64, fromBase64 } from './encryption';
+import { encryptFile, decryptFile, toBase64, fromBase64 } from './encryption';
 import { MetaMaskSDK } from '@metamask/sdk';
 
 // Initialize SDK once
@@ -151,6 +151,7 @@ export default function App() {
 
     const emailHash = ethers.keccak256(ethers.toUtf8Bytes(payload.email));
 
+
     // Derive deterministic owner from hash
     const deterministicOwner = ethers.getAddress(ethers.dataSlice(emailHash, 12));
     console.log("👤 Derived EOA Owner:", deterministicOwner);
@@ -187,7 +188,7 @@ export default function App() {
     if (window.google && import.meta.env.VITE_GOOGLE_CLIENT_ID) {
       window.google.accounts.id.prompt();
     } else {
-      const demoEmail = window.prompt("Google Client ID not configured. Enter an email to use for Demo Sign-In:", "aaryamanandhar2003@gmail.com");
+      const demoEmail = window.prompt("Google Client ID not configured. Enter an email to use for Demo Sign-In:", "demo@example.com");
       if (demoEmail) {
         handleGoogleResponse({
           credential: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(JSON.stringify({
@@ -322,11 +323,17 @@ export default function App() {
     try {
       const provider = await getProvider();
       const signer = await provider.getSigner();
+      const signerAddress = await signer.getAddress();
+      if (account && signerAddress.toLowerCase() !== account.toLowerCase()) {
+        throw new Error('This vault belongs to a different account. Connect MetaMask with the wallet that created the vault to reset its timer.');
+      }
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
       const tx = await contract.checkIn();
       await tx.wait();
+      const checkedInAt = Math.floor(Date.now() / 1000);
+      setVaultData(current => current ? { ...current, lastCheckIn: checkedInAt } : current);
+      setTimeRemaining(vaultData?.timePeriod ?? 0);
       showStatus('Check-in confirmed! Timer reset.', 'success');
-      await detectRole(account);
     } catch (e) {
       console.error(e);
       showStatus(`Transaction failed: ${e.message}`, 'error');
@@ -350,10 +357,8 @@ export default function App() {
       // Pinata Unpin
       if (vaultData && vaultData.ipfsCid) {
         try {
-          const pinataJwt = import.meta.env.VITE_PINATA_JWT;
-          const unpinRes = await fetch(`https://api.pinata.cloud/pinning/unpin/${vaultData.ipfsCid}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${pinataJwt}` }
+          const unpinRes = await fetch(`/api/pinata/unpin/${encodeURIComponent(vaultData.ipfsCid)}`, {
+            method: 'DELETE'
           });
           if (unpinRes.ok) {
             showStatus('🗑️ Vault fully destroyed and unpinned!', 'success');
@@ -376,6 +381,9 @@ export default function App() {
 
   const createVault = async () => {
     const targetBeneficiary = useManualAddr ? manualBenefAddr : predictedAddr;
+    if (password.length < 12) {
+      showStatus('Use a vault password with at least 12 characters.', 'error'); return;
+    }
     if (!file || !password || !targetBeneficiary || !timerDays) {
       showStatus('Fill in all fields and wait for address prediction.', 'error'); return;
     }
@@ -386,9 +394,9 @@ export default function App() {
     setIsLoading(true);
     try {
       // 1. Encrypt file
-      showStatus('🔒 Encrypting file with AES-GCM 256…', 'info');
+      showStatus('🔒 Encrypting file with a random AES-GCM 256 data key…', 'info');
       const fileBytes = new Uint8Array(await file.arrayBuffer());
-      const encrypted = await encryptFile(fileBytes, password);
+      const { encryptedBytes: encrypted, encryptedKey: wrappedKey } = await encryptFile(fileBytes, password);
       const encBase64 = toBase64(encrypted);
 
       // 2. Upload to IPFS via Pinata
@@ -398,11 +406,8 @@ export default function App() {
       const form = new FormData();
       form.append('file', fileToUpload);
 
-      const res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+      const res = await fetch('/api/pinata/upload', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}`
-        },
         body: form
       });
 
@@ -416,11 +421,7 @@ export default function App() {
 
       if (!cid) throw new Error("Pinata failed to return a CID (IpfsHash)");
 
-      // 3. Wrap AES key
-      showStatus('🔑 Wrapping encryption key…', 'info');
-      const wrappedKey = await wrapKeyForStorage(password);
-
-      // 4. Submit to blockchain
+      // 3. Submit the wrapped data key to the blockchain
       showStatus('⛓ Submitting vault to blockchain…', 'info');
       const provider = await getProvider();
       const signer = await provider.getSigner();
@@ -485,7 +486,7 @@ export default function App() {
 
       // 2. Decrypt
       showStatus('🔐 Decrypting...', 'info');
-      const decryptedBytes = await decryptFile(encryptedBytes, claimPassword);
+      const decryptedBytes = await decryptFile(encryptedBytes, claimPassword, unlockedVault.key);
       console.log('✅ Decryption successful!');
 
 
@@ -533,7 +534,7 @@ export default function App() {
         <div style={S.hero}>
           <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔐</div>
           <h1 style={S.heroTitle}>Dead Man's Vault</h1>
-          <p style={S.heroSub}>Decentralized inheritance · AES-GCM 256 · ERC-4337 Account Abstraction</p>
+          <p style={S.heroSub}>Decentralized inheritance · AES-GCM 256 · Account abstraction address derivation (prototype); full ERC-4337 UserOperation flow planned for v2</p>
         </div>
 
         {/* Header / Profile */}
@@ -618,7 +619,7 @@ export default function App() {
             {timeRemaining !== null && (
               <div style={S.timerText}>{secsToDuration(timeRemaining)} remaining</div>
             )}
-            <p style={{ color: '#64748b', textAlign: 'center', fontSize: '0.85rem', marginBottom: '20px' }}>Click below to reset the timer and prove you're alive.</p>
+            <p style={{ color: '#64748b', textAlign: 'center', fontSize: '0.85rem', marginBottom: '20px' }}>Check in any time to restart the full timer; you do not need to wait for it to expire.</p>
             <button id="btn-checkin" onClick={checkIn} disabled={isLoading} style={S.btnGreen}>
               {isLoading ? 'Processing…' : '💓 I Am Alive — Check In'}
             </button>
@@ -692,8 +693,8 @@ export default function App() {
             <input id="input-file" type="file" onChange={e => setFile(e.target.files[0])} style={{ ...S.input, padding: '10px' }} />
 
             {/* Password */}
-            <span style={S.label}>Vault Password (AES-GCM 256 encryption)</span>
-            <input id="input-password" type="password" placeholder="Strong password…" value={password} onChange={e => setPassword(e.target.value)} style={S.input} />
+            <span style={S.label}>Vault Password (at least 12 characters)</span>
+            <input id="input-password" type="password" minLength={12} placeholder="At least 12 characters…" value={password} onChange={e => setPassword(e.target.value)} style={S.input} />
 
             {/* Beneficiary Selection */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -748,7 +749,7 @@ export default function App() {
 
         {/* Footer */}
         <p style={{ color: '#1e293b', fontSize: '0.75rem', marginTop: '32px' }}>
-          Dead Man's Vault · Sepolia Testnet · ERC-4337 · AES-GCM 256
+          Dead Man's Vault · Sepolia Testnet · ERC-4337 UserOperation flow planned for v2
         </p>
       </div>
     </>

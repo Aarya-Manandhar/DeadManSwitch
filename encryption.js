@@ -1,7 +1,8 @@
 
 const SALT_LEN = 16;
 const IV_LEN = 12;
-const PBKDF2_ITERS = 310_000; // OWASP 2023 recommended for PBKDF2-SHA-256
+const PBKDF2_ITERS = 310_000;
+const ENVELOPE_MAGIC = new Uint8Array([0x44, 0x4d, 0x53, 0x32]); // DMS2
 
 // ─── INTERNAL: password → CryptoKey ────────────────────────────────────────
 async function deriveKey(password, salt, usage = ['encrypt', 'decrypt']) {
@@ -13,29 +14,46 @@ async function deriveKey(password, salt, usage = ['encrypt', 'decrypt']) {
     { name: 'PBKDF2', salt, iterations: PBKDF2_ITERS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    true,
+    false,
     usage
   );
 }
 
-// ─── EXPORT: Encrypt file bytes ─────────────────────────────────────────────
-// Returns a Uint8Array: [ salt | IV | ciphertext ]
+// ─── EXPORT: Encrypt file bytes with a random data key ───────────────────────
+// Returns { encryptedBytes, encryptedKey }. DMS2 distinguishes this format from
+// the legacy password-derived file format so existing vaults remain decryptable.
 export async function encryptFile(fileBytes, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
-  const key = await deriveKey(password, salt);
+  const dataKey = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+  );
 
-  const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, fileBytes);
+  const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dataKey, fileBytes);
 
-  const out = new Uint8Array(SALT_LEN + IV_LEN + cipherBuf.byteLength);
-  out.set(salt, 0);
-  out.set(iv, SALT_LEN);
-  out.set(new Uint8Array(cipherBuf), SALT_LEN + IV_LEN);
-  return out;
+  const encryptedBytes = new Uint8Array(ENVELOPE_MAGIC.length + IV_LEN + cipherBuf.byteLength);
+  encryptedBytes.set(ENVELOPE_MAGIC, 0);
+  encryptedBytes.set(iv, ENVELOPE_MAGIC.length);
+  encryptedBytes.set(new Uint8Array(cipherBuf), ENVELOPE_MAGIC.length + IV_LEN);
+  return {
+    encryptedBytes,
+    encryptedKey: await wrapKeyForStorage(dataKey, password),
+  };
 }
 
 // ─── EXPORT: Decrypt file bytes ─────────────────────────────────────────────
-export async function decryptFile(encryptedBytes, password) {
+export async function decryptFile(encryptedBytes, password, base64WrappedKey) {
+  const isCurrentFormat = ENVELOPE_MAGIC.every((byte, index) => encryptedBytes[index] === byte);
+  if (isCurrentFormat) {
+    if (!base64WrappedKey) throw new Error('Wrapped data key is missing.');
+    const key = await unwrapKeyFromStorage(base64WrappedKey, password);
+    const ivStart = ENVELOPE_MAGIC.length;
+    const iv = encryptedBytes.slice(ivStart, ivStart + IV_LEN);
+    const ciphertext = encryptedBytes.slice(ivStart + IV_LEN);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new Uint8Array(plain);
+  }
+
+  // Legacy vaults encrypted the file directly with a password-derived key.
   const salt = encryptedBytes.slice(0, SALT_LEN);
   const iv = encryptedBytes.slice(SALT_LEN, SALT_LEN + IV_LEN);
   const ciphertext = encryptedBytes.slice(SALT_LEN + IV_LEN);
@@ -45,14 +63,11 @@ export async function decryptFile(encryptedBytes, password) {
   return new Uint8Array(plain);
 }
 
-// ─── EXPORT: Wrap a fresh AES key with the user's password ──────────────────
+// ─── EXPORT: Wrap the file's AES data key with the user's password ──────────
 // Returns a base64 string: [ wrapSalt | wrapIV | wrappedKeyBytes ]
 // This base64 string is what gets stored in the contract's _encryptedKey field.
-export async function wrapKeyForStorage(password) {
-  // 1. Generate a fresh 256-bit AES-GCM data key
-  const dataKey = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
-  );
+export async function wrapKeyForStorage(dataKey, password) {
+  // 1. Export the random 256-bit data key so it can be wrapped.
   const rawDataKey = await crypto.subtle.exportKey('raw', dataKey);
 
   // 2. Derive a wrapping key from the password
@@ -118,19 +133,15 @@ export const fromBase64 = (b64) => {
  * @returns {string} The predicted Smart Account address
  */
 export function calculateCounterfactualAddress(factoryAddress, ownerAddress, salt) {
-  // Note: For a real production implementation, you would need the exact 
-  // keccak256(creation_code) of the SimpleAccount contract.
-  // This demonstrates the mathematical principle of CREATE2 as required by the syllabus.
-  
-  // Implementation using ethers (which follows the EIP-1014 standard)
+
   try {
     const { ethers } = window; // Assumes ethers is available globally or imported
     if (!ethers) return null;
 
     // Standard SimpleAccount initCodeHash (Change this if using a custom implementation)
-    const SIMPLE_ACCOUNT_INIT_CODE_HASH = "0x949704e6aa212af365f74da0501869e5d6d45e5d398695d36e2f4736f1c4f52f"; 
-    
-    // We construct the "salt" by hashing the owner's address if needed, 
+    const SIMPLE_ACCOUNT_INIT_CODE_HASH = "0x949704e6aa212af365f74da0501869e5d6d45e5d398695d36e2f4736f1c4f52f";
+
+
     // or use the salt provided (usually the email hash).
     return ethers.getCreate2Address(factoryAddress, salt, SIMPLE_ACCOUNT_INIT_CODE_HASH);
   } catch (e) {

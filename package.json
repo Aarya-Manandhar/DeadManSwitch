@@ -1,5 +1,6 @@
 {
   "name": "dead-mans-switch",
+  "description": "Sepolia prototype with account abstraction address derivation; full ERC-4337 UserOperation flow planned for v2.",
   "private": true,
   "version": "2.0.0",
   "type": "module",
