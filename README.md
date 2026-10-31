@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dead Man's Switch
 
 Dead Man's Switch is a React demo for creating a timed digital vault. It encrypts a selected file in the browser with a random AES-GCM data key, wraps that key with the user's password, stores the encrypted blob on IPFS through Pinata, and records the IPFS content ID, wrapped key, beneficiary, and check-in timer in a Sepolia smart contract. The owner can check in, update, or delete a vault; a beneficiary can use the contract's claim view after the timer expires.
@@ -52,3 +53,16 @@ Open the local URL printed by Vite. `npm run build` creates static files; it doe
 - Existing vaults created before the random-data-key format continue to decrypt using their legacy password-based file format.
 
 Run locally; the Pinata key must not be deployed in a public build.
+=======
+landing page 
+
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cb344585-fd8c-4337-8cc3-02199a278a71" />
+
+vault with timer
+
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7a138c3e-f261-472f-be09-5b97df1b8306" />
+
+ BENEFICIARY login
+
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cbb7e61c-da58-4383-9e1a-a5789fe301ba" />
+>>>>>>> 7761264a6dd08e3bef5ef9414ef08bc85ed47046
