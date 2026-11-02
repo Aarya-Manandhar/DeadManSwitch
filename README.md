@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Dead Man's Switch
 
 Dead Man's Switch is a React demo for creating a timed digital vault. It encrypts a selected file in the browser with a random AES-GCM data key, wraps that key with the user's password, stores the encrypted blob on IPFS through Pinata, and records the IPFS content ID, wrapped key, beneficiary, and check-in timer in a Sepolia smart contract. The owner can check in, update, or delete a vault; a beneficiary can use the contract's claim view after the timer expires.
@@ -44,7 +43,7 @@ Open the local URL printed by Vite. `npm run build` creates static files; it doe
 
 - This is a demo, not a production digital-legacy service. Do not use it for irreplaceable files or funds.
 - The contract's `vaults` mapping is public. Anyone can read the CID and password-wrapped data key at any time; the timer is a coordination mechanism, not a cryptographic access lock. The file stays encrypted on IPFS, but the password can be attacked offline if it is weak.
-- New vaults require a password of at least 12 characters. The password protects the random AES data key; losing it makes the file unrecoverable.
+- The app UI requires a password of at least 12 characters for new vaults, but the contract does not enforce this. The password protects the random AES data key; losing it makes the file unrecoverable, and a weak password can be guessed offline.
 - Pinata upload and unpin work only through the local Vite development server. A deployed app needs a serverless function or other server-side API to hold `PINATA_JWT` and proxy these operations.
 - The smart contract address is hard-coded and targets Sepolia. The app depends on the contract and test network being available; Sepolia assets have no mainnet value.
 - Google sign-in is a demo identity/address-mapping flow, not authentication for contract transactions. The fallback email prompt is not identity verification.
@@ -53,7 +52,9 @@ Open the local URL printed by Vite. `npm run build` creates static files; it doe
 - Existing vaults created before the random-data-key format continue to decrypt using their legacy password-based file format.
 
 Run locally; the Pinata key must not be deployed in a public build.
-=======
+
+## Screenshots
+
 landing page 
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cb344585-fd8c-4337-8cc3-02199a278a71" />
@@ -62,7 +63,6 @@ vault with timer
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7a138c3e-f261-472f-be09-5b97df1b8306" />
 
- BENEFICIARY login
+Beneficiary login
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cbb7e61c-da58-4383-9e1a-a5789fe301ba" />
->>>>>>> 7761264a6dd08e3bef5ef9414ef08bc85ed47046
