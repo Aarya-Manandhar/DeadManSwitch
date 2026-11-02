@@ -327,8 +327,30 @@ export default function App() {
       if (account && signerAddress.toLowerCase() !== account.toLowerCase()) {
         throw new Error('This vault belongs to a different account. Connect MetaMask with the wallet that created the vault to reset its timer.');
       }
+      const network = await provider.getNetwork();
+      if (network.chainId !== 11155111n) {
+        throw new Error('Switch MetaMask to the Sepolia test network, then try checking in again.');
+      }
+
+      const code = await provider.getCode(CONTRACT_ADDRESS);
+      if (code === '0x') {
+        throw new Error('No DeadManSwitch contract is deployed at the configured address on Sepolia.');
+      }
+
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-      const tx = await contract.checkIn();
+      const vault = await contract.vaults(signerAddress);
+      if (!vault.exists) {
+        throw new Error('This wallet has no vault at the configured contract address.');
+      }
+
+      // Build and preflight the actual checkIn call before opening MetaMask.
+      // This prevents an empty-data transaction and surfaces contract reverts clearly.
+      const data = contract.interface.encodeFunctionData('checkIn');
+      if (data === '0x') {
+        throw new Error('Could not encode the check-in contract call. Refresh the app and try again.');
+      }
+      await provider.call({ to: CONTRACT_ADDRESS, from: signerAddress, data });
+      const tx = await signer.sendTransaction({ to: CONTRACT_ADDRESS, data });
       await tx.wait();
       const checkedInAt = Math.floor(Date.now() / 1000);
       setVaultData(current => current ? { ...current, lastCheckIn: checkedInAt } : current);

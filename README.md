@@ -48,7 +48,7 @@ Open the local URL printed by Vite. `npm run build` creates static files; it doe
 - The smart contract address is hard-coded and targets Sepolia. The app depends on the contract and test network being available; Sepolia assets have no mainnet value.
 - Google sign-in is a demo identity/address-mapping flow, not authentication for contract transactions. The fallback email prompt is not identity verification.
 - Every state-changing transaction currently uses MetaMask directly. The prototype derives an account-abstraction address, but has no UserOperation, bundler, or paymaster flow; full ERC-4337 support is planned for v2.
-- The timer is configured in minutes in the UI and stored as seconds by the contract. Timer behavior depends on Sepolia transactions and block timestamps.
+- The timer is configured in minutes in the UI and stored as seconds by the contract. Owners can check in at any time, including while the timer is active; a successful check-in restarts the full timer. Timer behavior depends on Sepolia transactions and block timestamps.
 - Existing vaults created before the random-data-key format continue to decrypt using their legacy password-based file format.
 
 Run locally; the Pinata key must not be deployed in a public build.
