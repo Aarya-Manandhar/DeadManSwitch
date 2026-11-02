@@ -61,8 +61,8 @@ landing page
 
 vault with timer
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7a138c3e-f261-472f-be09-5b97df1b8306" />
+<img width="1560" height="897" alt="Vault with timer" src="https://github.com/user-attachments/assets/d12d090d-fc31-46ae-acc9-0ee5211b7777" />
 
 Beneficiary login
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cbb7e61c-da58-4383-9e1a-a5789fe301ba" />
+<img width="799" height="850" alt="Beneficiary login" src="https://github.com/user-attachments/assets/582482d5-938b-4e34-b12a-3af95758eb63" />
